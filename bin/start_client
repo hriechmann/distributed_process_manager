@@ -1,0 +1,8 @@
+#!/usr/bin/python3
+import sys
+sys.path.append("../src/") 
+import socket
+hostname = socket.gethostname()
+from eu.hriechmann.distributed_process_manager.client import Client
+myClient = Client(hostname, sys.argv[1], sys.argv[2])
+myClient.run()

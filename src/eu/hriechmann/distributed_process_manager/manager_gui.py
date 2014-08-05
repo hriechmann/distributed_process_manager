@@ -1,14 +1,38 @@
+from pkg_resources import yield_lines
+
 __author__ = 'hriechma'
 
 import sys
-import platform
-import PySide
 from PySide.QtCore import QRect, QTimer, SIGNAL
 from PySide.QtGui import QApplication, QMainWindow, QPushButton,\
-    QWidget, QGridLayout, QLabel
+    QWidget, QGridLayout, QLabel, QDialog
 from eu.hriechmann.distributed_process_manager.manager import Manager
-from eu.hriechmann.distributed_process_manager.common import ManagerCommands, ProcessStati
+from eu.hriechmann.distributed_process_manager.common import ManagerCommands, \
+    ProcessStati, ClientStati
 
+
+class ClientStartDialog(QDialog):
+    def __init__(self, parent, clients):
+        super(ClientStartDialog, self).__init__(parent)
+        grid_layout = QGridLayout(self)
+        xpos = 0
+        ypos = 0
+        for client in clients:
+            if client.status == ClientStati.NOT_RUNNING:
+                start_button = QPushButton(self)
+                start_button.setText(client.hostname.decode("utf-8"))
+                start_button.clicked.connect(self.start_button_clicked)
+                grid_layout.addWidget(start_button, ypos, xpos, 1, 1)
+                xpos += 1
+
+    def start_button_clicked(self):
+        print("QDialog Start Button clicked")
+        wanted_client = self.sender().text()
+        print("Wanted client: ", wanted_client)
+        from plumbum import SshMachine
+        remote = SshMachine(wanted_client)
+        start_client = remote["./bin/start-client"]
+        start_client("otho 5555") #TODO
 
 
 class MainWindow(QMainWindow):
@@ -17,30 +41,52 @@ class MainWindow(QMainWindow):
         self.resize(731, 475)
         central_widget = QWidget(self)
         grid_layout = QGridLayout(central_widget)
+        self.clients_label = QLabel(self)
+        self.clients_label.setText("Connected clients: ")
+        grid_layout.addWidget(self.clients_label, 0, 0, 1, 1)
+        start_clients_button = QPushButton(self)
+        start_clients_button.setText("Start Clients")
+        start_clients_button.clicked.connect(self.start_clients_clicked)
+        grid_layout.addWidget(start_clients_button, 0, 1, 1, 1)
+
         self.my_widgets = {}
         for id, process in enumerate(process_manager.get_process_descriptions()):
+            xpos = 0
+            ypos = id+1
             name_label = QLabel(self)
             name_label.setText(process.id)
-            grid_layout.addWidget(name_label, id, 0, 1, 1)
+            grid_layout.addWidget(name_label, ypos, xpos, 1, 1)
+            xpos += 1
+            host_label = QLabel(self)
+            host_label.setText(process.target_host)
+            grid_layout.addWidget(host_label, ypos, xpos, 1, 1)
+            xpos += 1
             status_label = QLabel(self)
             status_label.setText(ProcessStati.INIT.name)
-            grid_layout.addWidget(status_label, id, 1, 1, 1)
+            grid_layout.addWidget(status_label, ypos, xpos, 1, 1)
+            xpos += 1
             start_button = QPushButton(self)
             start_button.setText("Start "+process.id)
             start_button.clicked.connect(self.button_clicked)
-            grid_layout.addWidget(start_button, id, 2, 1, 1)
+            grid_layout.addWidget(start_button, ypos, xpos, 1, 1)
+            xpos += 1
             log_button = QPushButton(self)
             log_button.setText("Update-log "+process.id)
             log_button.clicked.connect(self.log_button_clicked)
-            grid_layout.addWidget(log_button, id, 3, 1, 1)
+            grid_layout.addWidget(log_button, ypos, xpos, 1, 1)
+            xpos += 1
             log_out_label = QLabel(self)
             log_out_label.setText("")
-            grid_layout.addWidget(log_out_label, id, 4, 1, 1)
+            grid_layout.addWidget(log_out_label, ypos, xpos, 1, 1)
+            xpos += 1
             log_err_label = QLabel(self)
             log_err_label.setText("")
-            grid_layout.addWidget(log_err_label, id, 5, 1, 1)
+            grid_layout.addWidget(log_err_label, ypos, xpos, 1, 1)
+            xpos += 1
             self.my_widgets[process.id] = [name_label, status_label, start_button, log_button, log_out_label, log_err_label]
         self.setCentralWidget(central_widget)
+
+        self.start_clients_dialog = ClientStartDialog(self, process_manager.get_client_stati())
 
         self.process_manager = process_manager
         timer = QTimer(self)
@@ -59,11 +105,26 @@ class MainWindow(QMainWindow):
             raise Exception("Unknown Button Command")
         self.process_manager.issue_command(command, wanted_process)
 
+    def start_clients_clicked(self):
+        self.start_clients_dialog.open()
+
     def log_button_clicked(self):
         wanted_process = self.sender().text().split(" ")[1]
         self.process_manager.issue_command(ManagerCommands.SEND_LOGS, wanted_process)
 
     def update_stati(self):
+        client_stati = self.process_manager.get_client_stati()
+        self.clients_label.setText("Connected clients: ")
+        for client in client_stati:
+            prev_text = self.clients_label.text()
+            if client.status == ClientStati.RUNNING:
+                #self.clients_label.setStyleSheet("QLabel { background-color : green}")
+                color_text = """<span style="color:green">"""
+            else:
+                #self.clients_label.setStyleSheet("QLabel { background-color : red}")
+                color_text = """<span style="color:red">"""
+            self.clients_label.setText(prev_text+" "+color_text+client.hostname.decode("utf-8")+"</span>,")
+
         process_stati = self.process_manager.get_process_stati()
         for process in process_stati:
             widgets = self.my_widgets[process.process_desc.id]
@@ -81,7 +142,10 @@ class MainWindow(QMainWindow):
 
 
 if __name__ == '__main__':
-    myManager = Manager("otho-manager", "otho", 5556)
+    if len(sys.argv) <= 1:
+        print("Usage: python manager_gui.py <configfilename>")
+        sys.exit(-1)
+    myManager = Manager("otho-manager", sys.argv[1], "otho", 5556)
     myManager.start()
     app = QApplication(sys.argv)
     frame = MainWindow(myManager)

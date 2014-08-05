@@ -8,6 +8,8 @@ ManagerCommands = Enum("ManagerCommands", "REGISTER INIT_PROCESS START_PROCESS S
 ClientCommands = Enum("ClientCommands", "REGISTER PROCESSSTATUS_CHANGED PROCESS_LOGS")
 ServerCommands = Enum("ServerCommands", "NEW_CLIENT")
 ProcessStati = Enum("ProcessStati", "INIT RUNNING STOPPING STOPPED FAILED KILLED")
+ClientStati = Enum("ClientStati", "NOT_RUNNING RUNNING")
+
 
 class Message(object):
 
@@ -19,6 +21,7 @@ class Message(object):
     def __str__(self):
         return "Message to "+str(self.receiver)+". Command is: "+str(self.command)
 
+
 class ProcessDescription(object):
 
     def __init__(self, id, target_host, command, working_directory="", env={}):
@@ -27,9 +30,11 @@ class ProcessDescription(object):
         self.command = command
         self.working_directory = working_directory
         self.env = env
+        print("Creating process: ", env)
 
     def __str__(self):
         return "Process: "+str(self.id)+"to be executed on host: "+self.target_host+"Command: "+self.command
+
 
 class ProcessStatus(object):
 
@@ -41,12 +46,20 @@ class ProcessStatus(object):
         self.log_err = ""
 
     def __str__(self):
-        return "ProcessStatues: Process: "+str(self.process_desc)+" on client: "+\
+        return "ProcessStatues: Process: "+str(self.process_desc)+" on client: " +\
                str(self.responsible_client)+" has status: "+self.status
            
-           
+
+class ClientDescription(object):
+
+    def __init__(self, hostname, local_path=""):
+        self.hostname = hostname
+        self.status = ClientStati.NOT_RUNNING
+        self.local_path = local_path
+
 BLOCKSIZE = 65536
 MAX_SIZE = 1024*1024*100
+
 
 class IncrementalFileReaderAndHasher(object):
     

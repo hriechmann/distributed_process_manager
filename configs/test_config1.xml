@@ -1,0 +1,21 @@
+<?xml version='1.0' encoding='utf'?> 
+<dpm_configuration>
+<client>
+    <hostname>otho</hostname>
+</client>
+<client>
+    <hostname>hector</hostname>
+    <local_path>/vol/bci/hriechma/distributed_process_manager/</local_path>
+</client>
+<process>
+    <id>DataAq</id>
+    <target_host>otho</target_host>
+    <command>UBiCIApplication</command>
+    <working_directory>/media/local/hriechma/redmine-git/ubici_application/</working_directory>
+    <env>
+        <LD_LIBRARY_PATH>/media/local/hriechma/redmine-git/libubici/</LD_LIBRARY_PATH>
+        <DISPLAY>:0</DISPLAY>
+        <HOME>/homes/hriechma</HOME>    
+    </env>
+</process>
+</dpm_configuration>

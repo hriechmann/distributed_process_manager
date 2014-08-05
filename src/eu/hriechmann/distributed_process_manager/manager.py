@@ -1,4 +1,5 @@
 from importlib._bootstrap import _check_name
+from tkinter.scrolledtext import example
 
 __author__ = 'hriechma'
 
@@ -103,13 +104,14 @@ import pickle
 import threading
 import queue
 import copy
+import configparser
 from eu.hriechmann.distributed_process_manager.common import Message, ManagerCommands, \
-    ServerCommands, ProcessDescription, ProcessStatus, ClientCommands
-
+    ServerCommands, ProcessDescription, ProcessStatus, ClientCommands, ClientStati, ClientDescription
+import xml.etree.ElementTree as ET
 
 class Manager(threading.Thread):
 
-    def __init__(self, id, server, port):
+    def __init__(self, id, config_file, server, port):
         super(Manager, self).__init__()
         self.id = id
         self.context = zmq.Context()
@@ -118,8 +120,68 @@ class Manager(threading.Thread):
         self.socket = None
         self.known_clients = []
         self.process_descriptions = []
-        test_process = ProcessDescription("DataAq", 'otho', """UBiCIApplication""", "/media/local/hriechma/redmine-git/ubici_application/")
-        self.process_descriptions.append(test_process)
+        # config = configparser.ConfigParser()
+        # try:
+        #     config.read(config_file)
+        # except IOError as e:
+        #     print("Could not read configfile: ", config_file)
+        #     raise e
+        # for section in config.sections():
+        #     id = config[section]["id"]
+        #     target_host = config[section]["target_host"]
+        #     command = config[section]["command"]
+        #     if "working_directory" in config[section]:
+        #         working_directory = config[section]["working_directory"]
+        #     if "env" in config[section]:
+        #
+        #
+
+        #test_process = ProcessDescription("DataAq", 'otho', """UBiCIApplication""",
+                                          # "/media/local/hriechma/redmine-git/ubici_application/",
+                                          # dict(LD_LIBRARY_PATH="/media/local/hriechma/redmine-git/libubici/",
+                                          #      DISPLAY=":0", HOME="/homes/hriechma"))
+        tree = ET.parse(config_file)
+        root = tree.getroot()
+        for xml_desc in root.getchildren():
+            if xml_desc.tag == 'process':
+                extracted_attributes = {}
+                for attribute in xml_desc.getchildren():
+                    if attribute.tag in ["id", "target_host", "command", "working_directory"]:
+                        extracted_attributes[attribute.tag] = attribute.text
+                    elif attribute.tag in ["env", ]:
+                        extracted_attributes[attribute.tag] = {}
+                        for key in attribute.getchildren():
+                            extracted_attributes[attribute.tag][key.tag] = key.text
+                    else:
+                        raise Exception("Unknown attribute of process: ", attribute.tag)
+                if not "id" in extracted_attributes:
+                    raise Exception("Process missing id")
+                if not "target_host" in extracted_attributes:
+                    raise Exception("Process with id: "+str(extracted_attributes["id"]+" has no target_host"))
+                if not "command" in extracted_attributes:
+                    raise Exception("Process with id: "+str(extracted_attributes["id"]+" has no command"))
+                new_process = ProcessDescription(extracted_attributes["id"],
+                                                 extracted_attributes["target_host"],
+                                                 extracted_attributes["command"],
+                                                 extracted_attributes["working_directory"]
+                                                 if "working_directory" in extracted_attributes else "",
+                                                 extracted_attributes["env"]
+                                                 if "env" in extracted_attributes else {})
+                self.process_descriptions.append(new_process)
+            elif xml_desc.tag == 'client':
+                extracted_attributes = {}
+                for attribute in xml_desc.getchildren():
+                    if attribute.tag in ["hostname, local_path"]:
+                        extracted_attributes[attribute.tag] = attribute.text
+                    else:
+                        raise Exception("Unknown attribute of client: ", attribute.tag)
+                if not "hostname" in extracted_attributes:
+                    raise Exception("Client missing hostname")
+                if not "local_path" in extracted_attributes:
+                    local_path = ""
+                self.known_clients.append(ClientDescription(extracted_attributes["hostname"].encode("ascii"), local_path))
+            else:
+                raise Exception("Bad xml, exspected tag: process or client")
         self.process_status = []
         self.internal_message_queue = queue.Queue()
 
@@ -157,7 +219,9 @@ class Manager(threading.Thread):
     def process_msg(self, message):
         if message.command == ServerCommands.NEW_CLIENT:
             new_client = message.payload
-            self.known_clients.append(new_client)
+            for client in self.known_clients:
+                if client.hostname == new_client:
+                    client.status = ClientStati.RUNNING
             print("Known clients are: ", self.known_clients)
             ret = []
             for process_desc in self.process_descriptions:
@@ -190,6 +254,9 @@ class Manager(threading.Thread):
 
     def get_process_stati(self):
         return self.process_status
+
+    def get_client_stati(self):
+        return self.known_clients
 
 if __name__ == "__main__":
     myManager = Manager("otho-manager", "otho", 5556)

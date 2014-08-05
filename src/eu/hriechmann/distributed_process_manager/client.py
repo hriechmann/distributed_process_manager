@@ -24,7 +24,7 @@ def reversed_lines(file, last_pos):
     if part: yield part[::-1]
 
 
-def reversed_blocks(file, blocksize=4096, last_pos):
+def reversed_blocks(file, last_pos, blocksize=4096):
     "Generate blocks of file's contents in reverse order."
     file.seek(0, os.SEEK_END)
     here = file.tell()
@@ -95,10 +95,13 @@ class Client(object):
                 temp_dir = tempfile.TemporaryDirectory(prefix=process.id)
                 std_out_file = open(os.path.join(temp_dir.name, "std_out"), 'w')
                 std_err_file = open(os.path.join(temp_dir.name, "std_err"), 'w')
-                env = {"LD_LIBRARY_PATH": "/media/local/hriechma/redmine-git/libubici/", "DISPLAY": ":0",
-                       "HOME": "/homes/hriechma"}
-                self.local_processes[process.id] = [subprocess.Popen(process.command, cwd=process.working_directory,
-                                                                     env=env, stdout=std_out_file, stderr=std_err_file), ProcessStati.INIT, temp_dir,0,0]
+                print(process.env)
+                try:
+                    self.local_processes[process.id] = [subprocess.Popen(process.command, cwd=process.working_directory,
+                                                                     env=process.env, stdout=std_out_file, stderr=std_err_file), ProcessStati.INIT, temp_dir, 0, 0]
+                except OSError as e:
+                    print("Starting process failed: ", process.id, "with ", e)
+                    #TODO
 
     def stop_process(self, process_id):
         print("Trying to stop process: ", process_id)
@@ -108,8 +111,12 @@ class Client(object):
     def send_process_out(self, process_id):
         process_data = self.local_processes[process_id]
         # grab file content
-        std_out_data = "".join(islice(reversed_lines(open(os.path.join(process_data[2].name, "std_out")),process_data[3]), 10))
-        std_err_data = "".join(islice(reversed_lines(open(os.path.join(process_data[2].name, "std_err")),process_data[3]), 10))
+        std_out_data = "".join(islice(reversed_lines(open(os.path.join(process_data[2].name, "std_out")),
+                                                     process_data[3]), 10))
+        std_err_data = "".join(islice(reversed_lines(open(os.path.join(process_data[2].name, "std_err")),
+                                                     process_data[4]), 10))
+        process_data[3] += len(std_out_data)
+        process_data[4] += len(std_err_data)
         return [Message("", ClientCommands.PROCESS_LOGS, (process_id, std_out_data, std_err_data)), ]
 
     def check_processes(self):
