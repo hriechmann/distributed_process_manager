@@ -142,5 +142,5 @@ class Client(object):
 
 
 if __name__ == "__main__":
-    myClient = Client("otho", "otho", 5555)
+    myClient = Client("otho.TechFak.Uni-Bielefeld.DE", "otho", 5555)
     myClient.run()

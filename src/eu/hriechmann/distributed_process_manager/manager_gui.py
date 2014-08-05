@@ -24,15 +24,25 @@ class ClientStartDialog(QDialog):
                 start_button.clicked.connect(self.start_button_clicked)
                 grid_layout.addWidget(start_button, ypos, xpos, 1, 1)
                 xpos += 1
+        self.clients = clients
 
     def start_button_clicked(self):
         print("QDialog Start Button clicked")
-        wanted_client = self.sender().text()
-        print("Wanted client: ", wanted_client)
-        from plumbum import SshMachine
-        remote = SshMachine(wanted_client)
-        start_client = remote["./bin/start-client"]
-        start_client("otho 5555") #TODO
+        wanted_client = self.sender().text().encode("ascii")
+        for client in self.clients:
+            if client.hostname == wanted_client:
+                print("Wanted client: ", client)
+                from plumbum import SshMachine
+                print(client.local_path)
+                remote = SshMachine(client.hostname.decode("utf-8"))
+                if client.local_path != "":
+                    remote.cwd.chdir(client.local_path)
+                #start_client = remote["/bin/bash"]
+                #start_client.run(["./bin/start_client", "otho", "5555"]) #TODO
+                #start_client = remote["./bin/start_client"]
+                #start_client.run(["otho", "5555"]) #TODO
+                remote.popen(args=["./bin/start_client", "otho", "5555"])#, ssh_opts=("-f",))#TODO server_name port
+        print("Starting done")
 
 
 class MainWindow(QMainWindow):
@@ -86,7 +96,8 @@ class MainWindow(QMainWindow):
             self.my_widgets[process.id] = [name_label, status_label, start_button, log_button, log_out_label, log_err_label]
         self.setCentralWidget(central_widget)
 
-        self.start_clients_dialog = ClientStartDialog(self, process_manager.get_client_stati())
+        self.clients = process_manager.get_client_stati()
+        self.start_clients_dialog = ClientStartDialog(self, self.clients)
 
         self.process_manager = process_manager
         timer = QTimer(self)
@@ -113,9 +124,10 @@ class MainWindow(QMainWindow):
         self.process_manager.issue_command(ManagerCommands.SEND_LOGS, wanted_process)
 
     def update_stati(self):
-        client_stati = self.process_manager.get_client_stati()
+        self.clients = self.process_manager.get_client_stati()
+        print(self.clients)
         self.clients_label.setText("Connected clients: ")
-        for client in client_stati:
+        for client in self.clients:
             prev_text = self.clients_label.text()
             if client.status == ClientStati.RUNNING:
                 #self.clients_label.setStyleSheet("QLabel { background-color : green}")

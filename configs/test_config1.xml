@@ -1,15 +1,15 @@
 <?xml version='1.0' encoding='utf'?> 
 <dpm_configuration>
 <client>
-    <hostname>otho</hostname>
+    <hostname>otho.TechFak.Uni-Bielefeld.DE</hostname>
 </client>
 <client>
-    <hostname>hector</hostname>
+    <hostname>hector.TechFak.Uni-Bielefeld.DE</hostname>
     <local_path>/vol/bci/hriechma/distributed_process_manager/</local_path>
 </client>
 <process>
     <id>DataAq</id>
-    <target_host>otho</target_host>
+    <target_host>otho.TechFak.Uni-Bielefeld.DE</target_host>
     <command>UBiCIApplication</command>
     <working_directory>/media/local/hriechma/redmine-git/ubici_application/</working_directory>
     <env>

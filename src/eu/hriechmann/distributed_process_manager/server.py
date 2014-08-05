@@ -134,6 +134,9 @@ class Server(object):
         if message.command == ClientCommands.REGISTER:
             self.clients.append(sender)
             print("Client was registered", sender)
+            for manager in self.managers:
+                ret.append((manager, Message("", ServerCommands.NEW_CLIENT, sender)))
+
         else:
             if message.receiver == "":
                 receivers = self.managers

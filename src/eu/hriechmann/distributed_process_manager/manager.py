@@ -171,15 +171,17 @@ class Manager(threading.Thread):
             elif xml_desc.tag == 'client':
                 extracted_attributes = {}
                 for attribute in xml_desc.getchildren():
-                    if attribute.tag in ["hostname, local_path"]:
+                    if attribute.tag in ["hostname", "local_path"]:
                         extracted_attributes[attribute.tag] = attribute.text
                     else:
                         raise Exception("Unknown attribute of client: ", attribute.tag)
                 if not "hostname" in extracted_attributes:
                     raise Exception("Client missing hostname")
                 if not "local_path" in extracted_attributes:
-                    local_path = ""
-                self.known_clients.append(ClientDescription(extracted_attributes["hostname"].encode("ascii"), local_path))
+                    extracted_attributes["local_path"] = ""
+                print("Local path: ", extracted_attributes["local_path"])
+                self.known_clients.append(ClientDescription(extracted_attributes["hostname"].encode("ascii"),
+                                                            extracted_attributes["local_path"]))
             else:
                 raise Exception("Bad xml, exspected tag: process or client")
         self.process_status = []
