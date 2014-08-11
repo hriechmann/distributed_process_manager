@@ -2,9 +2,7 @@
 python3 -c"
 import sys
 sys.path.append(\"src/\") 
-import socket
-hostname = socket.getfqdn()
 from eu.hriechmann.distributed_process_manager import client
-myClient = client.Client(hostname, \"$1\", $2)
+myClient = client.Client(\"configs/client.cfg\")
 myClient.run()
 " &
