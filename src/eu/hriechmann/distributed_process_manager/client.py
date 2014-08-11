@@ -1,19 +1,24 @@
 __author__ = 'hriechma'
 
 import zmq
+import zmq.auth
+from zmq.auth.thread import ThreadAuthenticator
 import pickle
 import tempfile
 import os
 import subprocess
+import configparser
+import logging
 from itertools import islice
 from eu.hriechmann.distributed_process_manager.common import \
-    Message, ClientCommands, ManagerCommands, ProcessStati
+    Message, ClientCommands, ManagerCommands, ProcessStati, \
+    ServerCommands
 
 
 #from http://stackoverflow.com/questions/260273/
 # most-efficient-way-to-search-the-last-x-lines-of-a-file-in-python/260433#260433
 def reversed_lines(file, last_pos):
-    "Generate the lines of file in reverse order."
+    """Generate the lines of file in reverse order."""
     part = ''
     for block in reversed_blocks(file, last_pos):
         for c in reversed(block):
@@ -21,11 +26,12 @@ def reversed_lines(file, last_pos):
                 yield part[::-1]
                 part = ''
             part += c
-    if part: yield part[::-1]
+    if part:
+        yield part[::-1]
 
 
 def reversed_blocks(file, last_pos, blocksize=4096):
-    "Generate blocks of file's contents in reverse order."
+    """Generate blocks of file's contents in reverse order."""
     file.seek(0, os.SEEK_END)
     here = file.tell()
     while last_pos < here:
@@ -36,19 +42,51 @@ def reversed_blocks(file, last_pos, blocksize=4096):
 
 
 class Client(object):
-
-    def __init__(self, id, server, port):
-        self.id = id
+    def __init__(self, config_file):
+        self.config = configparser.ConfigParser()
+        print(self.config.read([config_file, ]))
+        self.id = self.config.get("main", "id")
         self.context = zmq.Context()
-        self.server = server
-        self.port = port
+        self.server = self.config.get("main", "server")
+        self.port = self.config.get("main", "port")
+        self.use_encryption = self.config.getboolean("main", "use_encryption")
+        if self.config.has_section("allowed_processes"):
+            self.allowed_process = {}
+            for (name, value) in self.config.items("allowed_processes"):
+                self.allowed_process[name] = value
+
         self.process_desc = []
         self.local_processes = {}
 
     def run(self):
         # Socket to talk to server
         print("Connecting to server…"+self.server+" on port: "+str(self.port))
-        socket = self.context.socket(zmq.DEALER)
+
+        if self.use_encryption:
+            base_dir = os.getcwd()
+            public_keys_dir = os.path.join(base_dir, 'certificates')
+            secret_keys_dir = os.path.join(base_dir, 'keys')
+
+            # # Start an authenticator for this context.
+            # auth = ThreadAuthenticator(self.context)
+            # auth.start()
+            # auth.allow('127.0.0.1')
+            # # Tell authenticator to use the certificate in a directory
+            # auth.configure_curve(domain='*', location=public_keys_dir)
+
+            client_secret_file = os.path.join(secret_keys_dir, "client.key_secret")
+            client_public, client_secret = zmq.auth.load_certificate(client_secret_file)
+
+            socket = self.context.socket(zmq.DEALER)
+            socket.curve_secretkey = client_secret
+            socket.curve_publickey = client_public
+            server_public_file = os.path.join(public_keys_dir, "server.key")
+            server_public, _ = zmq.auth.load_certificate(server_public_file)
+            # The client must know the server's public key to make a CURVE connection.
+            socket.curve_serverkey = server_public
+        else:
+            socket = self.context.socket(zmq.DEALER)
+
         identity = str(self.id)
         socket.identity = identity.encode('ascii')
         socket.connect("tcp://"+self.server+":"+str(self.port))
@@ -74,11 +112,23 @@ class Client(object):
                 socket.send(pickle.dumps(new_message))
 
     def process_message(self, message):
-        print("Received message",message.command)
+        print("Received message", message.command)
         ret = []
-        if message.command == ManagerCommands.INIT_PROCESS:
+        if message.command == ServerCommands.SEND_KEEPALIVE:
+            ret.append(Message("", ClientCommands.KEEPALIVE))
+        elif message.command == ManagerCommands.INIT_PROCESS:
             print("I need to supervise process:", message.payload)
-            self.process_desc.append(message.payload)
+            new_process = message.payload
+            if hasattr(self, "allowed_process"):
+                if not new_process.id in self.allowed_process or \
+                    self.allowed_process[new_process.id] != os.path.join(
+                        new_process.working_directory, new_process.command):
+                    ###TODO reject process
+                    pass
+                else:
+                    self.process_desc.append(message.payload)
+            else:
+                self.process_desc.append(message.payload)
         elif message.command == ManagerCommands.START_PROCESS:
             self.start_process(message.payload)
         elif message.command == ManagerCommands.STOP_PROCESS:
@@ -142,5 +192,6 @@ class Client(object):
 
 
 if __name__ == "__main__":
-    myClient = Client("otho.TechFak.Uni-Bielefeld.DE", "otho", 5555)
+    logging.basicConfig(level=logging.DEBUG, format="[%(levelname)s] %(message)s")
+    myClient = Client("../configs/client.cfg")
     myClient.run()

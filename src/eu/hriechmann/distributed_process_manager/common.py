@@ -4,9 +4,9 @@ from enum import Enum
 import hashlib
 import os
 
-ManagerCommands = Enum("ManagerCommands", "REGISTER INIT_PROCESS START_PROCESS STOP_PROCESS SEND_LOGS")
-ClientCommands = Enum("ClientCommands", "REGISTER PROCESSSTATUS_CHANGED PROCESS_LOGS")
-ServerCommands = Enum("ServerCommands", "NEW_CLIENT")
+ManagerCommands = Enum("ManagerCommands", "REGISTER INIT_PROCESS START_PROCESS STOP_PROCESS SEND_LOGS KEEPALIVE")
+ClientCommands = Enum("ClientCommands", "REGISTER PROCESSSTATUS_CHANGED PROCESS_LOGS KEEPALIVE")
+ServerCommands = Enum("ServerCommands", "NEW_CLIENT LOST_CLIENT SEND_KEEPALIVE")
 ProcessStati = Enum("ProcessStati", "INIT RUNNING STOPPING STOPPED FAILED KILLED")
 ClientStati = Enum("ClientStati", "NOT_RUNNING RUNNING")
 

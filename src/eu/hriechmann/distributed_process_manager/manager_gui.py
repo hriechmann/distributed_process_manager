@@ -45,6 +45,24 @@ class ClientStartDialog(QDialog):
         print("Starting done")
 
 
+class ProcessStatusDialog(QDialog):
+    def __init__(self, parent):
+        super(ProcessStatusDialog, self).__init__(parent)
+        grid_layout = QGridLayout(self)
+        xpos = 0
+        ypos = 0
+        self.log_out_label = QLabel(self)
+        self.log_out_label.setText("")
+        grid_layout.addWidget(self.log_out_label, ypos, xpos, 1, 1)
+        xpos += 1
+        self.log_err_label = QLabel(self)
+        self.log_err_label.setText("")
+        grid_layout.addWidget(self.log_err_label, ypos, xpos, 1, 1)
+        xpos += 1
+        self.finished.connect(parent.status_dialog_closed)
+        self.show()
+
+
 class MainWindow(QMainWindow):
     def __init__(self, process_manager):
         super(MainWindow, self).__init__(None)
@@ -85,21 +103,16 @@ class MainWindow(QMainWindow):
             log_button.clicked.connect(self.log_button_clicked)
             grid_layout.addWidget(log_button, ypos, xpos, 1, 1)
             xpos += 1
-            log_out_label = QLabel(self)
-            log_out_label.setText("")
-            grid_layout.addWidget(log_out_label, ypos, xpos, 1, 1)
-            xpos += 1
-            log_err_label = QLabel(self)
-            log_err_label.setText("")
-            grid_layout.addWidget(log_err_label, ypos, xpos, 1, 1)
-            xpos += 1
-            self.my_widgets[process.id] = [name_label, status_label, start_button, log_button, log_out_label, log_err_label]
+            self.my_widgets[process.id] = [name_label, status_label, start_button, log_button]
         self.setCentralWidget(central_widget)
 
         self.clients = process_manager.get_client_stati()
         self.start_clients_dialog = ClientStartDialog(self, self.clients)
 
         self.process_manager = process_manager
+
+        self.status_dialogs = {}
+
         timer = QTimer(self)
         self.connect(timer, SIGNAL("timeout()"), self.update_stati)
         timer.start(1000)
@@ -121,7 +134,13 @@ class MainWindow(QMainWindow):
 
     def log_button_clicked(self):
         wanted_process = self.sender().text().split(" ")[1]
-        self.process_manager.issue_command(ManagerCommands.SEND_LOGS, wanted_process)
+        self.status_dialogs[wanted_process] = ProcessStatusDialog(self)
+
+    def status_dialog_closed(self):
+        for k, v in self.status_dialogs.items():
+            if v == self.sender():
+                del self.status_dialogs[k]
+                print("Found status dialog to delete")
 
     def update_stati(self):
         self.clients = self.process_manager.get_client_stati()
@@ -147,8 +166,12 @@ class MainWindow(QMainWindow):
                 widgets[2].setText("Stop "+process.process_desc.id)
             else:
                 raise Exception("Unknown process status"+process.status.name)
-            widgets[4].setText(process.log_out)
-            widgets[5].setText(process.log_err)
+            if process.process_desc.id in self.status_dialogs:
+                self.status_dialogs[process.process_desc.id].log_out_label.setText(process.log_out)
+                self.status_dialogs[process.process_desc.id].log_err_label.setText(process.log_err)
+        for log_dialog in self.status_dialogs:
+            print("requesting logs for ", log_dialog)
+            self.process_manager.issue_command(ManagerCommands.SEND_LOGS, log_dialog)
 
 
 

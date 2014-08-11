@@ -109,6 +109,7 @@ from eu.hriechmann.distributed_process_manager.common import Message, ManagerCom
     ServerCommands, ProcessDescription, ProcessStatus, ClientCommands, ClientStati, ClientDescription
 import xml.etree.ElementTree as ET
 
+
 class Manager(threading.Thread):
 
     def __init__(self, id, config_file, server, port):
@@ -212,14 +213,17 @@ class Manager(threading.Thread):
                     if new_message == "TERMINATE_MANAGER":
                         return
                     self.socket.send(pickle.dumps(new_message))
-            print("Received request: %s" % message)
-            message = self.socket.recv()
-            new_messages = self.process_msg(pickle.loads(message))
+            message = pickle.loads(self.socket.recv())
+            if message.command != ServerCommands.SEND_KEEPALIVE:
+                print("Received request: %s" % message)
+            new_messages = self.process_msg(message)
             for new_message in new_messages:
                 self.socket.send(pickle.dumps(new_message))
 
     def process_msg(self, message):
-        if message.command == ServerCommands.NEW_CLIENT:
+        if message.command == ServerCommands.SEND_KEEPALIVE:
+            return [Message("", ManagerCommands.KEEPALIVE), ]
+        elif message.command == ServerCommands.NEW_CLIENT:
             new_client = message.payload
             for client in self.known_clients:
                 if client.hostname == new_client:
@@ -232,6 +236,12 @@ class Manager(threading.Thread):
                     self.process_status.append(ProcessStatus(new_client, process_desc))
                     ret.append(Message(new_client, ManagerCommands.INIT_PROCESS, process_desc))
             return ret
+        elif message.command == ServerCommands.LOST_CLIENT:
+            lost_client = message.payload
+            for client in self.known_clients:
+                if client.hostname == lost_client:
+                    client.status = ClientStati.NOT_RUNNING
+
         elif message.command == ClientCommands.PROCESSSTATUS_CHANGED:
             for process in self.process_status:
                 if process.process_desc.id == message.payload[0]:
@@ -244,6 +254,7 @@ class Manager(threading.Thread):
         return []
 
     def issue_command(self, command, process_id):
+        print("I should send message", command, "to ", process_id)
         if command == "TERMINATE_MANAGER":
             self.internal_message_queue.put(command)
         for process in self.process_status:
