@@ -17,9 +17,9 @@ import zmq.auth
 
 def generate_certificates(base_dir):
     ''' Generate client and server CURVE certificate files'''
-    keys_dir = os.path.join(base_dir, 'certificates')
-    public_keys_dir = os.path.join(base_dir, 'public_keys')
-    secret_keys_dir = os.path.join(base_dir, 'private_keys')
+    keys_dir = os.path.join(base_dir, 'tmp')
+    public_keys_dir = os.path.join(base_dir, 'certificates')
+    secret_keys_dir = os.path.join(base_dir, 'keys')
 
     # Create directories for certificates, remove old content if necessary
     for d in [keys_dir, public_keys_dir, secret_keys_dir]:
@@ -42,6 +42,7 @@ def generate_certificates(base_dir):
         if key_file.endswith(".key_secret"):
             shutil.move(os.path.join(keys_dir, key_file),
                         os.path.join(secret_keys_dir, '.'))
+    shutil.rmtree(keys_dir)
 
 if __name__ == '__main__':
     if zmq.zmq_version_info() < (4,0):

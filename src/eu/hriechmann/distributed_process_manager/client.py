@@ -43,6 +43,7 @@ def reversed_blocks(file, last_pos, blocksize=4096):
 
 class Client(object):
     def __init__(self, config_file):
+        logging.basicConfig(level=logging.DEBUG, format="[%(levelname)s] %(message)s")
         self.config = configparser.ConfigParser()
         print(self.config.read([config_file, ]))
         self.id = self.config.get("main", "id")
@@ -50,6 +51,7 @@ class Client(object):
         self.server = self.config.get("main", "server")
         self.port = self.config.get("main", "port")
         self.use_encryption = self.config.getboolean("main", "use_encryption")
+        print("Using encryption: ", self.use_encryption)
         if self.config.has_section("allowed_processes"):
             self.allowed_process = {}
             for (name, value) in self.config.items("allowed_processes"):
@@ -60,9 +62,10 @@ class Client(object):
 
     def run(self):
         # Socket to talk to server
-        print("Connecting to server…"+self.server+" on port: "+str(self.port))
+        print("Connecting to server "+self.server+" on port: "+str(self.port))
 
         if self.use_encryption:
+            print("Using encryption")
             base_dir = os.getcwd()
             public_keys_dir = os.path.join(base_dir, 'certificates')
             secret_keys_dir = os.path.join(base_dir, 'keys')
@@ -112,7 +115,8 @@ class Client(object):
                 socket.send(pickle.dumps(new_message))
 
     def process_message(self, message):
-        print("Received message", message.command)
+        if message.command != ServerCommands.SEND_KEEPALIVE:
+            print("Received message", message.command)
         ret = []
         if message.command == ServerCommands.SEND_KEEPALIVE:
             ret.append(Message("", ClientCommands.KEEPALIVE))
@@ -120,15 +124,15 @@ class Client(object):
             print("I need to supervise process:", message.payload)
             new_process = message.payload
             if hasattr(self, "allowed_process"):
-                if not new_process.id in self.allowed_process or \
-                    self.allowed_process[new_process.id] != os.path.join(
+                if not new_process.id.lower() in self.allowed_process or \
+                    self.allowed_process[new_process.id.lower()] != os.path.join(
                         new_process.working_directory, new_process.command):
-                    ###TODO reject process
-                    pass
+                    ###TODO send reject process message to manager
+                    print("My config forbids me to execute this process", self.allowed_process)
                 else:
-                    self.process_desc.append(message.payload)
+                    self.process_desc.append(new_process)
             else:
-                self.process_desc.append(message.payload)
+                self.process_desc.append(new_process)
         elif message.command == ManagerCommands.START_PROCESS:
             self.start_process(message.payload)
         elif message.command == ManagerCommands.STOP_PROCESS:

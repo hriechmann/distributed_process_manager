@@ -14,6 +14,7 @@ from eu.hriechmann.distributed_process_manager.common import Message, ClientComm
 class Server(object):
 
     def __init__(self, config_file):
+        logging.basicConfig(level=logging.DEBUG, format="[%(levelname)s] %(message)s")
         self.config = configparser.ConfigParser()
         print(self.config.read([config_file, ]))
         self.client_port = self.config.getint("main", "client_port")
@@ -99,8 +100,6 @@ class Server(object):
                         del self.managers[manager]
                     else:
                         self.managers[manager] += 1
-
-
 
     def process_client_msg(self, message, sender):
         ret = []
